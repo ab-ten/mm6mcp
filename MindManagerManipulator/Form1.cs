@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace MindManagerManipulator;
 
 public partial class Form1 : Form
@@ -39,6 +41,9 @@ public partial class Form1 : Form
   {
     selectedDocument_ = null;
     centralTopicTextBox.Clear();
+    outlineTextBox.Clear();
+    readOutlineButton.Enabled = false;
+    measureXmlButton.Enabled = false;
 
     documentComboBox.BeginUpdate();
 
@@ -97,6 +102,9 @@ public partial class Form1 : Form
   {
     selectedDocument_ = null;
     centralTopicTextBox.Clear();
+    outlineTextBox.Clear();
+    readOutlineButton.Enabled = false;
+    measureXmlButton.Enabled = false;
 
     if (documentComboBox.SelectedItem is not DocumentItem item) {
       return;
@@ -110,6 +118,8 @@ public partial class Form1 : Form
         Convert.ToString(centralTopic.Text) ?? "";
 
       selectedDocument_ = item.ComObject;
+      readOutlineButton.Enabled = true;
+      measureXmlButton.Enabled = true;
 
       statusLabel.Text =
         $"Selected: {item.DisplayName}";
@@ -124,6 +134,71 @@ public partial class Form1 : Form
         MessageBoxButtons.OK,
         MessageBoxIcon.Error);
     }
+  }
+
+  private void ReadOutlineButton_Click(
+    object? sender,
+    EventArgs e)
+  {
+    if (selectedDocument_ is null) {
+      return;
+    }
+
+    readOutlineButton.Enabled = false;
+    measureXmlButton.Enabled = false;
+    UseWaitCursor = true;
+
+    try {
+      OutlineReadResult result =
+        MindManagerOutlineReader.Read(
+          selectedDocument_);
+
+      outlineTextBox.Text =
+        MindManagerOutlineReader.Format(
+          result.Root);
+
+      statusLabel.Text =
+        $"Read {result.NodeCount} topic(s) " +
+        $"in {result.Elapsed.TotalMilliseconds:F1} ms.";
+    }
+    catch (Exception ex) {
+      outlineTextBox.Clear();
+
+      statusLabel.Text =
+        "Failed to read document outline.";
+
+      MessageBox.Show(
+        this,
+        ex.ToString(),
+        "MindManager outline error",
+        MessageBoxButtons.OK,
+        MessageBoxIcon.Error);
+    }
+    finally {
+      UseWaitCursor = false;
+
+      measureXmlButton.Enabled = readOutlineButton.Enabled =
+        selectedDocument_ is not null;
+    }
+  }
+
+  private void measureXmlButton_Click(
+    object? sender,
+    EventArgs e)
+  {
+    if (selectedDocument_ is null) {
+      return;
+    }
+
+    dynamic document = selectedDocument_;
+    Stopwatch stopwatch = Stopwatch.StartNew();
+    string xml =
+      Convert.ToString(document.Xml) ?? "";
+    stopwatch.Stop();
+
+    statusLabel.Text =
+      $"Document.Xml: {xml.Length:N0} chars " +
+      $"in {stopwatch.Elapsed.TotalMilliseconds:F1} ms.";
   }
 
   private sealed class DocumentItem
