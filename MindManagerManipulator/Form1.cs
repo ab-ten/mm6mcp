@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace MindManagerManipulator;
 
 public partial class Form1 : Form
@@ -190,15 +188,32 @@ public partial class Form1 : Form
       return;
     }
 
-    dynamic document = selectedDocument_;
-    Stopwatch stopwatch = Stopwatch.StartNew();
-    string xml =
-      Convert.ToString(document.Xml) ?? "";
-    stopwatch.Stop();
+    try {
+      XmlOutlineReadResult result =
+        MindManagerXmlOutlineReader.Read(
+          selectedDocument_);
 
-    statusLabel.Text =
-      $"Document.Xml: {xml.Length:N0} chars " +
-      $"in {stopwatch.Elapsed.TotalMilliseconds:F1} ms.";
+      outlineTextBox.Text =
+        MindManagerOutlineReader.Format(
+          result.Root);
+
+      statusLabel.Text =
+        $"XML: {result.NodeCount} topic(s), " +
+        $"fetch {result.XmlFetchElapsed.TotalMilliseconds:F1} ms, " +
+        $"parse {result.ParseElapsed.TotalMilliseconds:F1} ms, " +
+        $"total {(result.XmlFetchElapsed+result.ParseElapsed).TotalMilliseconds:F1} ms.";
+    }
+    catch (Exception ex) {
+      statusLabel.Text =
+        "Failed to read XML outline.";
+
+      MessageBox.Show(
+        this,
+        ex.ToString(),
+        "MindManager XML error",
+        MessageBoxButtons.OK,
+        MessageBoxIcon.Error);
+    }
   }
 
   private sealed class DocumentItem
