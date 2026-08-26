@@ -1,0 +1,5 @@
+ignore /bin/
+ignore /obj/
+allow *.csproj
+allow *.cs
+allow *.csproj.user
