@@ -112,3 +112,71 @@ internal static class MindManagerXmlOutlineReader
       children);
   }
 }
+
+
+internal static class OutlineComparer
+{
+  public static string? Compare(
+    OutlineNode expected,
+    OutlineNode actual)
+  {
+    return CompareNode(
+      expected,
+      actual,
+      "root");
+  }
+
+  private static string? CompareNode(
+    OutlineNode expected,
+    OutlineNode actual,
+    string path)
+  {
+    if (expected.Id != actual.Id) {
+      return
+        $"{path}: ID differs: " +
+        $"COM='{expected.Id}', XML='{actual.Id}'";
+    }
+
+    if (expected.Text != actual.Text) {
+      return
+        $"{path}: Text differs: " +
+        $"COM='{Escape(expected.Text)}', " +
+        $"XML='{Escape(actual.Text)}'";
+    }
+
+    if (expected.Children.Count !=
+        actual.Children.Count) {
+      return
+        $"{path}: child count differs: " +
+        $"COM={expected.Children.Count}, " +
+        $"XML={actual.Children.Count}";
+    }
+
+    for (int i=0; i<expected.Children.Count; ++i) {
+      OutlineNode expectedChild =
+        expected.Children[i];
+
+      OutlineNode actualChild =
+        actual.Children[i];
+
+      string? error =
+        CompareNode(
+          expectedChild,
+          actualChild,
+          $"{path}/{i}");
+
+      if (error is not null) {
+        return error;
+      }
+    }
+
+    return null;
+  }
+
+  private static string Escape(string text)
+  {
+    return text
+      .Replace("\r", "\\r")
+      .Replace("\n", "\\n");
+  }
+}

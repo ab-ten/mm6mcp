@@ -216,6 +216,49 @@ public partial class Form1 : Form
     }
   }
 
+  private void compareOutlineButton_Click(
+    object? sender,
+    EventArgs e)
+  {
+    if (selectedDocument_ is null) {
+      return;
+    }
+
+    try {
+      OutlineReadResult comResult =
+        MindManagerOutlineReader.Read(
+          selectedDocument_);
+
+      XmlOutlineReadResult xmlResult =
+        MindManagerXmlOutlineReader.Read(
+          selectedDocument_);
+
+      string? difference =
+        OutlineComparer.Compare(
+          comResult.Root,
+          xmlResult.Root);
+
+      if (difference is null) {
+        statusLabel.Text =
+          $"MATCH: {comResult.NodeCount} topic(s), " +
+          $"COM {comResult.Elapsed.TotalMilliseconds:F1} ms, " +
+          $"XML " +
+          $"{(xmlResult.XmlFetchElapsed+xmlResult.ParseElapsed).TotalMilliseconds:F1} ms.";
+      }else {
+        statusLabel.Text =
+          $"MISMATCH: {difference}";
+      }
+    }
+    catch (Exception ex) {
+      MessageBox.Show(
+        this,
+        ex.ToString(),
+        "Outline comparison error",
+        MessageBoxButtons.OK,
+        MessageBoxIcon.Error);
+    }
+  }
+
   private sealed class DocumentItem
   {
     public DocumentItem(
