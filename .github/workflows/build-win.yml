@@ -1,4 +1,4 @@
-name: build-for-workaround-github-bug
+name: Build Windows
 
 on:
   push:
@@ -12,6 +12,10 @@ on:
 jobs:
   build:
     runs-on: windows-2025-vs2026
+
+    defaults:
+      run:
+        working-directory: MindManagerManipulator
 
     steps:
       - uses: actions/checkout@v6
