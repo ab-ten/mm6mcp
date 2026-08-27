@@ -13,9 +13,16 @@ internal sealed record MindManagerDocumentSelection(
   string DisplayName,
   string CentralTopicText);
 
+internal sealed record TopicTextUpdateResult(
+  string Id,
+  string OldText,
+  string NewText,
+  bool Changed);
+
 internal sealed class MindManagerSession
 {
   private const string ApplicationProgId = "MindManager.Application.6";
+  private const int MmRangeAllTopics = 2;
   private readonly int ownerThreadId_ = Environment.CurrentManagedThreadId;
   private readonly Dictionary<long, DocumentEntry> visibleDocuments_ = [];
   private object? application_;
@@ -103,6 +110,77 @@ internal sealed class MindManagerSession
         "No MindManager document is selected.");
 
     return MindManagerXmlOutlineReader.Read(document);
+  }
+
+  public TopicTextUpdateResult
+  UpdateTopicText(
+    string id,
+    string newText)
+  {
+    VerifyAccess();
+    if (string.IsNullOrEmpty(id)) {
+      throw new ArgumentException("Topic OId must not be empty.", nameof(id));
+    }
+
+    ArgumentNullException.ThrowIfNull(newText);
+    object documentObject =
+      selectedDocument_
+      ?? throw new InvalidOperationException("No MindManager document is selected.");
+
+    XmlOutlineReadResult before = MindManagerXmlOutlineReader.Read(documentObject);
+    OutlineNode? target = FindOutlineNode(before.Root, id);
+    if (target is null) {
+      throw new InvalidOperationException($"Topic {id} is not part of the exposed outline.");
+    }
+
+    string oldText = target.Text;
+    if (oldText == newText) {
+      return new TopicTextUpdateResult(id, oldText, newText, false);
+    }
+
+    dynamic document = documentObject;
+    dynamic range = document.Range(MmRangeAllTopics, true);
+    dynamic? topic = range.FindByGuid(id);
+    if (topic is null) {
+      throw new InvalidOperationException($"FindByGuid failed for {id}.");
+    }
+
+    string guid = Convert.ToString(topic.Guid) ?? "";
+    if (guid != id) {
+      throw new InvalidOperationException($"FindByGuid returned unexpected Guid: {guid}.");
+    }
+
+    if (Convert.ToBoolean(topic.IsFloatingTopic())) {
+      throw new InvalidOperationException("The topic is a floating topic.");
+    }
+
+    topic.Text = newText;
+    XmlOutlineReadResult after = MindManagerXmlOutlineReader.Read(documentObject);
+    OutlineNode? updated = FindOutlineNode(after.Root, id);
+    if (updated is null) {
+      throw new InvalidOperationException("The topic OId disappeared after the write.");
+    }
+    if (updated.Text != newText) {
+      throw new InvalidOperationException("Document.Xml does not contain the updated text.");
+    }
+
+    return new TopicTextUpdateResult(id, oldText, newText, true);
+  }
+
+  private static OutlineNode?
+  FindOutlineNode(OutlineNode node, string id) {
+    if (node.Id == id) {
+      return node;
+    }
+
+    foreach (OutlineNode child in node.Children) {
+      OutlineNode? found = FindOutlineNode(child, id);
+      if (found is not null) {
+        return found;
+      }
+    }
+
+    return null;
   }
 
   private object GetApplication() {

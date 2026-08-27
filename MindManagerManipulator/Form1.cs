@@ -77,6 +77,7 @@ public partial class Form1 : Form
       MindManagerDocumentSelection selection = session_.SelectDocument(item.Token);
       centralTopicTextBox.Text = selection.CentralTopicText;
       readOutlineButton.Enabled = true;
+      writeProbeButton.Enabled = true;
       statusLabel.Text = $"Selected: {selection.DisplayName}";
     }
     catch (Exception ex) {
@@ -99,6 +100,7 @@ public partial class Form1 : Form
     }
 
     readOutlineButton.Enabled = false;
+    writeProbeButton.Enabled = false;
     UseWaitCursor = true;
 
     try {
@@ -126,7 +128,7 @@ public partial class Form1 : Form
     }
     finally {
       UseWaitCursor = false;
-      readOutlineButton.Enabled = session_.HasSelection;
+      writeProbeButton.Enabled = readOutlineButton.Enabled = session_.HasSelection;
     }
   }
 
@@ -134,6 +136,7 @@ public partial class Form1 : Form
     centralTopicTextBox.Clear();
     outlineTextBox.Clear();
     readOutlineButton.Enabled = false;
+    writeProbeButton.Enabled = false;
   }
 
   internal Task<UiOutlineProbeResult>
@@ -143,5 +146,42 @@ public partial class Form1 : Form
             session_.ReadSelectedOutline(),
             Environment.CurrentManagedThreadId),
         cancellationToken);
+  }
+
+  private void WriteProbeButton_Click(object? sender, EventArgs e) {
+    if (!session_.HasSelection) {
+      return;
+    }
+
+    writeProbeButton.Enabled = false;
+    UseWaitCursor = true;
+
+    try {
+      XmlOutlineReadResult outline = session_.ReadSelectedOutline();
+      OutlineNode target =
+        outline.Root.Children.Count > 0
+          ? outline.Root.Children[0]
+          : outline.Root;
+
+      string newText = target.Text + " [write-probe]";
+      TopicTextUpdateResult result = session_.UpdateTopicText(target.Id, newText);
+      statusLabel.Text =
+        $"UpdateTopicText OK: " +
+        $"\"{result.OldText}\" -> " +
+        $"\"{result.NewText}\".";
+    }
+    catch (Exception ex) {
+      statusLabel.Text = "UpdateTopicText failed.";
+      MessageBox.Show(
+        this,
+        ex.ToString(),
+        "MindManager update error",
+        MessageBoxButtons.OK,
+        MessageBoxIcon.Error);
+    }
+    finally {
+      UseWaitCursor = false;
+      writeProbeButton.Enabled = session_.HasSelection;
+    }
   }
 }
