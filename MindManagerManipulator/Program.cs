@@ -6,7 +6,9 @@ static class Program
   static void Main()
   {
     ApplicationConfiguration.Initialize();
-    using GrpcProbeServer grpcServer = GrpcProbeServer.Start();
-    Application.Run(new Form1());
+
+    using Form1 form = new();
+    using GrpcProbeServer grpcServer = GrpcProbeServer.Start(form);
+    Application.Run(form);
   }
 }

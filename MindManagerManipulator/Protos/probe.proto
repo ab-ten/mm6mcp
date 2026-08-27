@@ -6,6 +6,8 @@ package mindmanager.manipulator.v1;
 
 service Probe {
   rpc Ping(PingRequest) returns (PingReply);
+  rpc ReadSelectedOutline(ReadSelectedOutlineRequest)
+      returns (ReadSelectedOutlineReply);
 }
 
 message PingRequest {
@@ -13,4 +15,14 @@ message PingRequest {
 
 message PingReply {
   string message = 1;
+}
+
+message ReadSelectedOutlineRequest {
+}
+
+message ReadSelectedOutlineReply {
+  int32 node_count = 1;
+  string root_text = 2;
+  int32 handler_thread_id = 3;
+  int32 callback_thread_id = 4;
 }

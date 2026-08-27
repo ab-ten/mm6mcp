@@ -17,7 +17,7 @@ internal sealed class GrpcProbeServer
     application_ = application;
   }
 
-  public static GrpcProbeServer Start() {
+  public static GrpcProbeServer Start(Form1 form) {
     WebApplicationBuilder builder = WebApplication.CreateBuilder();
 
     builder.WebHost.ConfigureKestrel(options => {
@@ -30,6 +30,7 @@ internal sealed class GrpcProbeServer
         });
     });
 
+    builder.Services.AddSingleton(form);
     builder.Services.AddGrpc();
     WebApplication application = builder.Build();
     application.MapGrpcService<ProbeGrpcService>();

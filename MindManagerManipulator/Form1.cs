@@ -1,5 +1,11 @@
 namespace MindManagerManipulator;
 
+
+internal sealed record UiOutlineProbeResult(
+  XmlOutlineReadResult Result,
+  int CallbackThreadId);
+
+
 public partial class Form1 : Form
 {
   private readonly MindManagerSession session_;
@@ -128,5 +134,14 @@ public partial class Form1 : Form
     centralTopicTextBox.Clear();
     outlineTextBox.Clear();
     readOutlineButton.Enabled = false;
+  }
+
+  internal Task<UiOutlineProbeResult>
+  ReadSelectedOutlineForGrpcProbeAsync(CancellationToken cancellationToken) {
+    return this.InvokeAsync(
+        () => new UiOutlineProbeResult(
+            session_.ReadSelectedOutline(),
+            Environment.CurrentManagedThreadId),
+        cancellationToken);
   }
 }
