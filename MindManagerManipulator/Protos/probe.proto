@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option csharp_namespace = "MindManagerManipulator.Grpc";
+
+package mindmanager.manipulator.v1;
+
+service Probe {
+  rpc Ping(PingRequest) returns (PingReply);
+}
+
+message PingRequest {
+}
+
+message PingReply {
+  string message = 1;
+}
