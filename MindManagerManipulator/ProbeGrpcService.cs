@@ -1,5 +1,6 @@
 using Grpc.Core;
 using MindManagerManipulator.Grpc;
+using GrpcOutlineNode = MindManagerManipulator.Grpc.OutlineNode;
 
 namespace MindManagerManipulator;
 
@@ -19,14 +20,29 @@ internal sealed class ProbeGrpcService
   public override async Task<ReadSelectedOutlineReply>
   ReadSelectedOutline(ReadSelectedOutlineRequest request, ServerCallContext context) {
     int handlerThreadId = Environment.CurrentManagedThreadId;
+
     UiOutlineProbeResult uiRead =
       await form_.ReadSelectedOutlineForGrpcProbeAsync(context.CancellationToken);
 
     return new ReadSelectedOutlineReply {
+      Root = ToGrpcOutlineNode(uiRead.Result.Root),
       NodeCount = uiRead.Result.NodeCount,
-      RootText = uiRead.Result.Root.Text,
       HandlerThreadId = handlerThreadId,
       CallbackThreadId = uiRead.CallbackThreadId,
     };
+  }
+
+  private static GrpcOutlineNode
+  ToGrpcOutlineNode(OutlineNode node) {
+    GrpcOutlineNode result = new() {
+      Id = node.Id,
+      Text = node.Text,
+    };
+
+    foreach (OutlineNode child in node.Children) {
+      result.Children.Add(ToGrpcOutlineNode(child));
+    }
+
+    return result;
   }
 }

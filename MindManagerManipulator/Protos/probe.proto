@@ -21,8 +21,16 @@ message ReadSelectedOutlineRequest {
 }
 
 message ReadSelectedOutlineReply {
-  int32 node_count = 1;
-  string root_text = 2;
+  OutlineNode root = 1;
+  int32 node_count = 2;
+
+  // Probe 3 verification only.
   int32 handler_thread_id = 3;
   int32 callback_thread_id = 4;
+}
+
+message OutlineNode {
+  string id = 1;
+  string text = 2;
+  repeated OutlineNode children = 3;
 }
