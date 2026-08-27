@@ -33,4 +33,5 @@ message OutlineNode {
   string id = 1;
   string text = 2;
   repeated OutlineNode children = 3;
+  repeated string icon_markers = 4;
 }

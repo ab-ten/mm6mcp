@@ -75,15 +75,10 @@ internal static class MindManagerXmlOutlineReader
     return XDocument.Load(reader);
   }
 
-  private static OutlineNode ReadTopic(
-    XElement topic,
-    ref int nodeCount)
-  {
+  private static OutlineNode ReadTopic(XElement topic, ref int nodeCount) {
     ++nodeCount;
 
-    string id =
-      (string?)topic.Attribute("OId")
-      ?? "";
+    string id = (string?)topic.Attribute("OId") ?? "";
 
     string text =
       (string?)topic
@@ -98,18 +93,37 @@ internal static class MindManagerXmlOutlineReader
         ApplicationNamespace+"SubTopics");
 
     if (subTopics is not null) {
-      foreach (XElement child in
-        subTopics.Elements(
-          ApplicationNamespace+"Topic")) {
-        children.Add(
-          ReadTopic(child, ref nodeCount));
+      foreach (XElement child in subTopics.Elements(ApplicationNamespace+"Topic")) {
+        children.Add(ReadTopic(child, ref nodeCount));
       }
     }
 
-    return new OutlineNode(
-      id,
-      text,
-      children);
+    List<string> iconMarkers = ReadIconMarkers(topic);
+
+    return new OutlineNode(id, text, children, iconMarkers);
+  }
+
+  private static List<string>
+  ReadIconMarkers(XElement topic) {
+    List<string> result = [];
+
+    XElement? icons =
+      topic
+        .Element(ApplicationNamespace+"IconsGroup")
+        ?.Element(ApplicationNamespace+"Icons");
+
+    if (icons is null) {
+      return result;
+    }
+
+    foreach (XElement icon in icons.Elements(ApplicationNamespace+"Icon")) {
+      string? iconType = (string?)icon.Attribute("IconType");
+      if (!string.IsNullOrEmpty(iconType)) {
+        result.Add(iconType);
+      }
+    }
+
+    return result;
   }
 }
 

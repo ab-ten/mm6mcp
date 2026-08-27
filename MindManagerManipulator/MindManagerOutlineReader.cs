@@ -6,7 +6,8 @@ namespace MindManagerManipulator;
 internal sealed record OutlineNode(
   string Id,
   string Text,
-  List<OutlineNode> Children);
+  List<OutlineNode> Children,
+  List<string> IconMarkers);
 
 internal sealed record OutlineReadResult(
   OutlineNode Root,
@@ -70,10 +71,7 @@ internal static class MindManagerOutlineReader
         ReadTopic(child, ref nodeCount));
     }
 
-    return new OutlineNode(
-      id,
-      text,
-      children);
+    return new OutlineNode(id, text, children, []);
   }
 
   private static void AppendTopic(

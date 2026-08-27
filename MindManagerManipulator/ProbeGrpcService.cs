@@ -39,6 +39,10 @@ internal sealed class ProbeGrpcService
       Text = node.Text,
     };
 
+    foreach (string iconMarker in node.IconMarkers) {
+      result.IconMarkers.Add(iconMarker);
+    }
+
     foreach (OutlineNode child in node.Children) {
       result.Children.Add(ToGrpcOutlineNode(child));
     }
