@@ -9,7 +9,7 @@ static class Program
 
     using Form1 form = new();
     using GrpcProbeServer grpcServer = GrpcProbeServer.Start(form);
-    using HttpApiServer httpApiServer = HttpApiServer.Start();
+    using HttpApiServer httpApiServer = HttpApiServer.Start(form);
     Application.Run(form);
   }
 }

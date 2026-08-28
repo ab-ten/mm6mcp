@@ -160,6 +160,16 @@ public partial class Form1 : Form
       cancellationToken);
   }
 
+  internal Task<XmlOutlineReadResult?>
+  TryReadSelectedOutlineForHttpApiAsync(CancellationToken cancellationToken) {
+    return this.InvokeAsync(
+      () =>
+        session_.HasSelection
+          ? session_.ReadSelectedOutline()
+          : (XmlOutlineReadResult?)null,
+      cancellationToken);
+  }
+
   private void WriteProbeButton_Click(object? sender, EventArgs e) {
     if (!session_.HasSelection) {
       return;
