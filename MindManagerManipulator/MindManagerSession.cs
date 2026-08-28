@@ -38,6 +38,17 @@ internal sealed class TopicTextConflictException
   public string ActualText { get; }
 }
 
+internal sealed class TopicNotExposedException
+: Exception
+{
+  public TopicNotExposedException(string id)
+    : base($"Topic {id} is not part of the exposed outline.") {
+    Id = id;
+  }
+
+  public string Id { get; }
+}
+
 internal sealed class MindManagerSession
 {
   private const string ApplicationProgId = "MindManager.Application.6";
@@ -148,6 +159,20 @@ internal sealed class MindManagerSession
       selectedDocument_
       ?? throw new InvalidOperationException("No MindManager document is selected.");
 
+    //
+    // First verify that the requested topic belongs to
+    // the logical outline currently exposed by the GUI.
+    //
+    XmlOutlineReadResult before =
+      MindManagerXmlOutlineReader.Read(documentObject);
+
+    OutlineNode? target =
+      FindOutlineNode(before.Root, id);
+
+    if (target is null) {
+      throw new TopicNotExposedException(id);
+    }
+
     dynamic document = documentObject;
     dynamic range = document.Range(MmRangeAllTopics, true);
     dynamic? topic = range.FindByGuid(id);
@@ -161,17 +186,8 @@ internal sealed class MindManagerSession
     }
 
     if (Convert.ToBoolean(topic.IsFloatingTopic())) {
-      throw new InvalidOperationException("The topic is a floating topic.");
-    }
-
-    //
-    // Read the logical state immediately before
-    // performing the write.
-    //
-    XmlOutlineReadResult before = MindManagerXmlOutlineReader.Read(documentObject);
-    OutlineNode? target = FindOutlineNode(before.Root, id);
-    if (target is null) {
-      throw new InvalidOperationException($"Topic {id} is not part of the exposed outline.");
+      throw new InvalidOperationException(
+        "Logical outline topic unexpectedly reports itself as floating.");
     }
 
     string oldText = target.Text;

@@ -13,8 +13,6 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Grpc.AspNetCore" Version="2.83.0" />
-    <Protobuf Include="Protos\probe.proto" GrpcServices="Server" />
   </ItemGroup>
 
 </Project>

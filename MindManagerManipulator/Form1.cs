@@ -1,11 +1,6 @@
 namespace MindManagerManipulator;
 
 
-internal sealed record UiOutlineProbeResult(
-  XmlOutlineReadResult Result,
-  int CallbackThreadId);
-
-
 public partial class Form1 : Form
 {
   private readonly MindManagerSession session_;
@@ -139,24 +134,28 @@ public partial class Form1 : Form
     writeProbeButton.Enabled = false;
   }
 
-  internal Task<UiOutlineProbeResult>
-  ReadSelectedOutlineForGrpcProbeAsync(CancellationToken cancellationToken) {
+  internal Task<XmlOutlineReadResult?>
+  TryReadSelectedOutlineForHttpApiAsync(CancellationToken cancellationToken) {
     return this.InvokeAsync(
-        () => new UiOutlineProbeResult(
-            session_.ReadSelectedOutline(),
-            Environment.CurrentManagedThreadId),
-        cancellationToken);
+      () =>
+        session_.HasSelection
+          ? session_.ReadSelectedOutline()
+          : (XmlOutlineReadResult?)null,
+      cancellationToken);
   }
 
-  internal Task<TopicTextUpdateResult>
-  UpdateTopicTextForGrpcAsync(
+  internal Task<TopicTextUpdateResult?>
+  TryUpdateTopicTextForHttpApiAsync(
     string id,
     string expectedText,
     string newText,
     CancellationToken cancellationToken)
   {
     return this.InvokeAsync(
-      () => session_.UpdateTopicText(id, expectedText, newText),
+      () =>
+        session_.HasSelection
+          ? session_.UpdateTopicText(id, expectedText, newText)
+          : null,
       cancellationToken);
   }
 
