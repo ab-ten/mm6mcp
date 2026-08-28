@@ -218,6 +218,12 @@ internal sealed class MindManagerSession
     return OutlineDocumentInfoCalculator.Calculate(outline.Root, outline.NodeCount);
   }
 
+  public OutlineReadProjectionResult ReadSelectedOutline(int? maxDepth) {
+    VerifyAccess();
+    XmlOutlineReadResult outline = ReadSelectedOutline();
+    return OutlineReadProjection.Create(outline.Root, maxDepth);
+  }
+
   private static OutlineNode?
   FindOutlineNode(OutlineNode node, string id) {
     if (node.Id == id) {

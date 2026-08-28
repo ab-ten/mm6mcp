@@ -49,8 +49,8 @@ internal sealed class HttpApiServer
 
     application.MapPost(
       "/v1/read-outline",
-      (CancellationToken cancellationToken) =>
-        ReadOutlineAsync(form, cancellationToken));
+      (int? maxDepth, CancellationToken cancellationToken) =>
+        ReadOutlineAsync(form, maxDepth, cancellationToken));
 
     application.MapPost(
       "/v1/update-topic-text",
@@ -72,9 +72,17 @@ internal sealed class HttpApiServer
   }
 
   private static async Task<IResult>
-  ReadOutlineAsync(Form1 form, CancellationToken cancellationToken) {
-    XmlOutlineReadResult? result =
-      await form.TryReadSelectedOutlineForHttpApiAsync(cancellationToken);
+  ReadOutlineAsync(Form1 form, int? maxDepth, CancellationToken cancellationToken) {
+    if (maxDepth.HasValue && maxDepth.Value < 0) {
+      return Results.BadRequest(
+        new {
+          error = "invalid_request",
+          message = "maxDepth must not be negative.",
+        });
+    }
+
+    OutlineReadProjectionResult? result =
+      await form.TryReadSelectedOutlineForHttpApiAsync(maxDepth, cancellationToken);
 
     if (result is null) {
       return Results.Conflict(
@@ -85,7 +93,11 @@ internal sealed class HttpApiServer
     }
 
     return Results.Ok(
-      new { root = result.Root, nodeCount = result.NodeCount });
+      new {
+        root = result.Root,
+        returnedNodeCount = result.ReturnedNodeCount,
+        truncated = result.Truncated,
+      });
   }
 
   private static async Task<IResult>

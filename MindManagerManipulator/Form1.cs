@@ -134,13 +134,13 @@ public partial class Form1 : Form
     writeProbeButton.Enabled = false;
   }
 
-  internal Task<XmlOutlineReadResult?>
-  TryReadSelectedOutlineForHttpApiAsync(CancellationToken cancellationToken) {
+  internal Task<OutlineReadProjectionResult?>
+  TryReadSelectedOutlineForHttpApiAsync(int? maxDepth, CancellationToken cancellationToken) {
     return this.InvokeAsync(
       () =>
         session_.HasSelection
-          ? session_.ReadSelectedOutline()
-          : (XmlOutlineReadResult?)null,
+          ? session_.ReadSelectedOutline(maxDepth)
+          : null,
       cancellationToken);
   }
 
