@@ -135,11 +135,12 @@ public partial class Form1 : Form
   }
 
   internal Task<OutlineReadProjectionResult?>
-  TryReadSelectedOutlineForHttpApiAsync(int? maxDepth, CancellationToken cancellationToken) {
+  TryReadSelectedOutlineForHttpApiAsync(
+      string? startId, int? maxDepth, CancellationToken cancellationToken) {
     return this.InvokeAsync(
       () =>
         session_.HasSelection
-          ? session_.ReadSelectedOutline(maxDepth)
+          ? session_.ReadSelectedOutline(startId, maxDepth)
           : null,
       cancellationToken);
   }

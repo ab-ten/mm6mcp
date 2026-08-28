@@ -14,6 +14,12 @@ internal sealed record UpdateTopicTextHttpRequest
   public required string? NewText { get; init; }
 }
 
+internal sealed record ReadOutlineHttpRequest
+{
+  public string? StartId { get; init; }
+  public int? MaxDepth { get; init; }
+}
+
 internal sealed class HttpApiServer
 : IDisposable
 {
@@ -49,8 +55,9 @@ internal sealed class HttpApiServer
 
     application.MapPost(
       "/v1/read-outline",
-      (int? maxDepth, CancellationToken cancellationToken) =>
-        ReadOutlineAsync(form, maxDepth, cancellationToken));
+      (ReadOutlineHttpRequest? request,
+       CancellationToken cancellationToken) =>
+         ReadOutlineAsync(form, request, cancellationToken));
 
     application.MapPost(
       "/v1/update-topic-text",
@@ -72,7 +79,22 @@ internal sealed class HttpApiServer
   }
 
   private static async Task<IResult>
-  ReadOutlineAsync(Form1 form, int? maxDepth, CancellationToken cancellationToken) {
+  ReadOutlineAsync(
+    Form1 form,
+    ReadOutlineHttpRequest? request,
+    CancellationToken cancellationToken)
+  {
+    string? startId = request?.StartId;
+    int? maxDepth = request?.MaxDepth;
+
+    if (startId is not null && startId.Length == 0) {
+      return Results.BadRequest(
+        new {
+          error = "invalid_request",
+          message = "startId must not be empty.",
+        });
+    }
+
     if (maxDepth.HasValue && maxDepth.Value < 0) {
       return Results.BadRequest(
         new {
@@ -81,23 +103,32 @@ internal sealed class HttpApiServer
         });
     }
 
-    OutlineReadProjectionResult? result =
-      await form.TryReadSelectedOutlineForHttpApiAsync(maxDepth, cancellationToken);
+    try {
+      OutlineReadProjectionResult? result =
+        await form.TryReadSelectedOutlineForHttpApiAsync(startId, maxDepth, cancellationToken);
 
-    if (result is null) {
-      return Results.Conflict(
+      if (result is null) {
+        return Results.Conflict(
+          new {
+            error = "no_document_selected",
+            message = "No MindManager document is selected.",
+          });
+      }
+
+      return Results.Ok(
         new {
-          error = "no_document_selected",
-          message = "No MindManager document is selected.",
+          root = result.Root,
+          returnedNodeCount = result.ReturnedNodeCount,
+          truncated = result.Truncated,
         });
     }
-
-    return Results.Ok(
-      new {
-        root = result.Root,
-        returnedNodeCount = result.ReturnedNodeCount,
-        truncated = result.Truncated,
-      });
+    catch (TopicNotExposedException) {
+      return Results.NotFound(
+        new {
+          error = "topic_not_found",
+          message = "Topic is not part of the exposed outline.",
+        });
+    }
   }
 
   private static async Task<IResult>

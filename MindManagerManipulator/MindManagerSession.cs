@@ -142,6 +142,19 @@ internal sealed class MindManagerSession
     return MindManagerXmlOutlineReader.Read(document);
   }
 
+  public OutlineReadProjectionResult
+  ReadSelectedOutline(string? startId, int? maxDepth) {
+    VerifyAccess();
+    XmlOutlineReadResult outline = ReadSelectedOutline();
+    OutlineNode start =
+      startId is null
+        ? outline.Root
+        : FindOutlineNode(outline.Root, startId)
+          ?? throw new TopicNotExposedException(startId);
+
+    return OutlineReadProjection.Create(start, maxDepth);
+  }
+
   public TopicTextUpdateResult
   UpdateTopicText(
     string id,
