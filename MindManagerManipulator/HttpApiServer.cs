@@ -58,6 +58,11 @@ internal sealed class HttpApiServer
        CancellationToken cancellationToken) =>
          UpdateTopicTextAsync(form, request, cancellationToken));
 
+    application.MapGet(
+      "/v1/document-info",
+      (CancellationToken cancellationToken) =>
+      GetDocumentInfoAsync(form, cancellationToken));
+
     application
       .StartAsync()
       .GetAwaiter()
@@ -151,6 +156,29 @@ internal sealed class HttpApiServer
           message = "Topic text changed since it was read.",
         });
     }
+  }
+
+  private static async Task<IResult>
+  GetDocumentInfoAsync(Form1 form, CancellationToken cancellationToken) {
+    OutlineDocumentInfo? result =
+      await form.TryReadSelectedDocumentInfoForHttpApiAsync(cancellationToken);
+
+    if (result is null) {
+      return Results.Conflict(
+        new {
+          error = "no_document_selected",
+          message = "No MindManager document is selected.",
+        });
+    }
+
+    return Results.Ok(
+      new {
+        centralTopicText = result.CentralTopicText,
+        nodeCount = result.NodeCount,
+        leafCount = result.LeafCount,
+        maxDepth = result.MaxDepth,
+        averageLeafDepth = result.AverageLeafDepth,
+      });
   }
 
   public void Dispose() {

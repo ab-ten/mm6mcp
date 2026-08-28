@@ -159,6 +159,16 @@ public partial class Form1 : Form
       cancellationToken);
   }
 
+  internal Task<OutlineDocumentInfo?>
+  TryReadSelectedDocumentInfoForHttpApiAsync(CancellationToken cancellationToken) {
+    return this.InvokeAsync(
+      () =>
+        session_.HasSelection
+          ? session_.ReadSelectedDocumentInfo()
+          : null,
+      cancellationToken);
+  }
+
   private void WriteProbeButton_Click(object? sender, EventArgs e) {
     if (!session_.HasSelection) {
       return;

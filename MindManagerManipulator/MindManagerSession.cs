@@ -212,6 +212,12 @@ internal sealed class MindManagerSession
     return new TopicTextUpdateResult(id, oldText, newText, true);
   }
 
+  public OutlineDocumentInfo ReadSelectedDocumentInfo() {
+    VerifyAccess();
+    XmlOutlineReadResult outline = ReadSelectedOutline();
+    return OutlineDocumentInfoCalculator.Calculate(outline.Root, outline.NodeCount);
+  }
+
   private static OutlineNode?
   FindOutlineNode(OutlineNode node, string id) {
     if (node.Id == id) {
