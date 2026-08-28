@@ -19,6 +19,25 @@ internal sealed record TopicTextUpdateResult(
   string NewText,
   bool Changed);
 
+internal sealed class TopicTextConflictException
+: Exception
+{
+  public TopicTextConflictException(
+    string id,
+    string expectedText,
+    string actualText)
+    : base($"Topic {id} text changed since it was read.")
+  {
+    Id = id;
+    ExpectedText = expectedText;
+    ActualText = actualText;
+  }
+
+  public string Id { get; }
+  public string ExpectedText { get; }
+  public string ActualText { get; }
+}
+
 internal sealed class MindManagerSession
 {
   private const string ApplicationProgId = "MindManager.Application.6";
@@ -115,6 +134,7 @@ internal sealed class MindManagerSession
   public TopicTextUpdateResult
   UpdateTopicText(
     string id,
+    string expectedText,
     string newText)
   {
     VerifyAccess();
@@ -122,21 +142,11 @@ internal sealed class MindManagerSession
       throw new ArgumentException("Topic OId must not be empty.", nameof(id));
     }
 
+    ArgumentNullException.ThrowIfNull(expectedText);
     ArgumentNullException.ThrowIfNull(newText);
     object documentObject =
       selectedDocument_
       ?? throw new InvalidOperationException("No MindManager document is selected.");
-
-    XmlOutlineReadResult before = MindManagerXmlOutlineReader.Read(documentObject);
-    OutlineNode? target = FindOutlineNode(before.Root, id);
-    if (target is null) {
-      throw new InvalidOperationException($"Topic {id} is not part of the exposed outline.");
-    }
-
-    string oldText = target.Text;
-    if (oldText == newText) {
-      return new TopicTextUpdateResult(id, oldText, newText, false);
-    }
 
     dynamic document = documentObject;
     dynamic range = document.Range(MmRangeAllTopics, true);
@@ -152,6 +162,25 @@ internal sealed class MindManagerSession
 
     if (Convert.ToBoolean(topic.IsFloatingTopic())) {
       throw new InvalidOperationException("The topic is a floating topic.");
+    }
+
+    //
+    // Read the logical state immediately before
+    // performing the write.
+    //
+    XmlOutlineReadResult before = MindManagerXmlOutlineReader.Read(documentObject);
+    OutlineNode? target = FindOutlineNode(before.Root, id);
+    if (target is null) {
+      throw new InvalidOperationException($"Topic {id} is not part of the exposed outline.");
+    }
+
+    string oldText = target.Text;
+    if (oldText != expectedText) {
+      throw new TopicTextConflictException(id, expectedText, oldText);
+    }
+
+    if (oldText == newText) {
+      return new TopicTextUpdateResult(id, oldText, newText, false);
     }
 
     topic.Text = newText;

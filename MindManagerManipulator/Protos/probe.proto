@@ -8,6 +8,8 @@ service Probe {
   rpc Ping(PingRequest) returns (PingReply);
   rpc ReadSelectedOutline(ReadSelectedOutlineRequest)
       returns (ReadSelectedOutlineReply);
+  rpc UpdateTopicText(UpdateTopicTextRequest)
+      returns (UpdateTopicTextReply);
 }
 
 message PingRequest {
@@ -34,4 +36,18 @@ message OutlineNode {
   string text = 2;
   repeated OutlineNode children = 3;
   repeated string icon_markers = 4;
+}
+
+message UpdateTopicTextRequest {
+  string id = 1;
+
+  optional string expected_text = 2;
+  optional string new_text = 3;
+}
+
+message UpdateTopicTextReply {
+  string id = 1;
+  string old_text = 2;
+  string new_text = 3;
+  bool changed = 4;
 }

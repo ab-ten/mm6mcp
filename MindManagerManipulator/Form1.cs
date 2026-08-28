@@ -148,6 +148,18 @@ public partial class Form1 : Form
         cancellationToken);
   }
 
+  internal Task<TopicTextUpdateResult>
+  UpdateTopicTextForGrpcAsync(
+    string id,
+    string expectedText,
+    string newText,
+    CancellationToken cancellationToken)
+  {
+    return this.InvokeAsync(
+      () => session_.UpdateTopicText(id, expectedText, newText),
+      cancellationToken);
+  }
+
   private void WriteProbeButton_Click(object? sender, EventArgs e) {
     if (!session_.HasSelection) {
       return;
@@ -164,7 +176,7 @@ public partial class Form1 : Form
           : outline.Root;
 
       string newText = target.Text + " [write-probe]";
-      TopicTextUpdateResult result = session_.UpdateTopicText(target.Id, newText);
+      TopicTextUpdateResult result = session_.UpdateTopicText(target.Id, target.Text, newText);
       statusLabel.Text =
         $"UpdateTopicText OK: " +
         $"\"{result.OldText}\" -> " +

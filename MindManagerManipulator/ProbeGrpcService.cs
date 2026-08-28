@@ -32,6 +32,41 @@ internal sealed class ProbeGrpcService
     };
   }
 
+  public override async Task<UpdateTopicTextReply>
+  UpdateTopicText(UpdateTopicTextRequest request, ServerCallContext context) {
+    if (string.IsNullOrEmpty(request.Id)) {
+      throw new RpcException(new Status(StatusCode.InvalidArgument, "id is required."));
+    }
+    if (! request.HasExpectedText) {
+      throw new RpcException(
+          new Status(StatusCode.InvalidArgument, "expected_text is required."));
+    }
+    if (! request.HasNewText) {
+      throw new RpcException(
+          new Status(StatusCode.InvalidArgument, "new_text is required."));
+    }
+
+    try {
+      TopicTextUpdateResult result =
+        await form_.UpdateTopicTextForGrpcAsync(
+          request.Id,
+          request.ExpectedText,
+          request.NewText,
+          context.CancellationToken);
+
+      return new UpdateTopicTextReply {
+        Id = result.Id,
+        OldText = result.OldText,
+        NewText = result.NewText,
+        Changed = result.Changed,
+      };
+    }
+    catch (TopicTextConflictException) {
+      throw new RpcException(
+          new Status(StatusCode.Aborted, "Topic text changed since it was read."));
+    }
+  }
+
   private static GrpcOutlineNode
   ToGrpcOutlineNode(OutlineNode node) {
     GrpcOutlineNode result = new() {
