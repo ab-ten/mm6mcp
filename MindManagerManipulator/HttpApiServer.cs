@@ -7,6 +7,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MindManagerManipulator;
 
+internal sealed record UpdateTopicTextHttpRequest
+{
+  public required string? Id { get; init; }
+  public required string? ExpectedText { get; init; }
+  public required string? NewText { get; init; }
+}
+
 internal sealed class HttpApiServer
 : IDisposable
 {
@@ -45,6 +52,12 @@ internal sealed class HttpApiServer
       (CancellationToken cancellationToken) =>
         ReadOutlineAsync(form, cancellationToken));
 
+    application.MapPost(
+      "/v1/update-topic-text",
+      (UpdateTopicTextHttpRequest request,
+       CancellationToken cancellationToken) =>
+         UpdateTopicTextAsync(form, request, cancellationToken));
+
     application
       .StartAsync()
       .GetAwaiter()
@@ -68,6 +81,76 @@ internal sealed class HttpApiServer
 
     return Results.Ok(
       new { root = result.Root, nodeCount = result.NodeCount });
+  }
+
+  private static async Task<IResult>
+  UpdateTopicTextAsync(
+    Form1 form,
+    UpdateTopicTextHttpRequest request,
+    CancellationToken cancellationToken)
+  {
+    if (string.IsNullOrEmpty(request.Id)) {
+      return Results.BadRequest(
+        new {
+          error = "invalid_request",
+          message = "id is required.",
+        });
+    }
+
+    if (request.ExpectedText is null) {
+      return Results.BadRequest(
+        new {
+          error = "invalid_request",
+          message = "expectedText is required and must not be null.",
+        });
+    }
+
+    if (request.NewText is null) {
+      return Results.BadRequest(
+        new {
+          error = "invalid_request",
+          message = "newText is required and must not be null.",
+        });
+    }
+
+    try {
+      TopicTextUpdateResult? result =
+        await form.TryUpdateTopicTextForHttpApiAsync(
+          request.Id,
+          request.ExpectedText,
+          request.NewText,
+          cancellationToken);
+
+      if (result is null) {
+        return Results.Conflict(
+          new {
+            error = "no_document_selected",
+            message = "No MindManager document is selected.",
+          });
+      }
+
+      return Results.Ok(
+        new {
+          id = result.Id,
+          oldText = result.OldText,
+          newText = result.NewText,
+          changed = result.Changed,
+        });
+    }
+    catch (TopicNotExposedException) {
+      return Results.NotFound(
+        new {
+          error = "topic_not_found",
+          message = "Topic is not part of the exposed outline.",
+        });
+    }
+    catch (TopicTextConflictException) {
+      return Results.Conflict(
+        new {
+          error = "text_conflict",
+          message = "Topic text changed since it was read.",
+        });
+    }
   }
 
   public void Dispose() {

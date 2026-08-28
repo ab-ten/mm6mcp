@@ -170,6 +170,21 @@ public partial class Form1 : Form
       cancellationToken);
   }
 
+  internal Task<TopicTextUpdateResult?>
+  TryUpdateTopicTextForHttpApiAsync(
+    string id,
+    string expectedText,
+    string newText,
+    CancellationToken cancellationToken)
+  {
+    return this.InvokeAsync(
+      () =>
+        session_.HasSelection
+          ? session_.UpdateTopicText(id, expectedText, newText)
+          : null,
+      cancellationToken);
+  }
+
   private void WriteProbeButton_Click(object? sender, EventArgs e) {
     if (!session_.HasSelection) {
       return;
