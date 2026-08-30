@@ -237,6 +237,16 @@ internal sealed class MindManagerSession
     return OutlineReadProjection.Create(outline.Root, maxDepth);
   }
 
+  public string ReadSelectedDocumentXml() {
+    VerifyAccess();
+    dynamic document =
+      selectedDocument_
+      ?? throw new InvalidOperationException("No MindManager document is selected.");
+    return
+      Convert.ToString(document.Xml)
+      ?? throw new InvalidOperationException("MindManager returned no document XML.");
+  }
+
   private static OutlineNode?
   FindOutlineNode(OutlineNode node, string id) {
     if (node.Id == id) {

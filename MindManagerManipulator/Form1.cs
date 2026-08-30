@@ -206,4 +206,32 @@ public partial class Form1 : Form
       writeProbeButton.Enabled = session_.HasSelection;
     }
   }
+
+  private void ReadXmlButton_Click(object? sender, EventArgs e) {
+    if (!session_.HasSelection) {
+      return;
+    }
+
+    readXmlButton.Enabled = false;
+    UseWaitCursor = true;
+    try {
+      string xml = session_.ReadSelectedDocumentXml();
+      outlineTextBox.Text = xml;
+      statusLabel.Text = $"Read XML: {xml.Length:N0} character(s).";
+    }
+    catch (Exception ex) {
+      outlineTextBox.Clear();
+      statusLabel.Text = "Failed to read document XML.";
+      MessageBox.Show(
+        this,
+        ex.ToString(),
+        "MindManager XML error",
+        MessageBoxButtons.OK,
+        MessageBoxIcon.Error);
+    }
+    finally {
+      UseWaitCursor = false;
+      readXmlButton.Enabled = session_.HasSelection;
+    }
+  }
 }

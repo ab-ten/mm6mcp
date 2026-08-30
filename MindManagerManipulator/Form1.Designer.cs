@@ -34,6 +34,7 @@ partial class Form1
     readOutlineButton = new Button();
     outlineTextBox = new TextBox();
     writeProbeButton = new Button();
+    readXmlButton = new Button();
     SuspendLayout();
     // 
     // documentLabel
@@ -129,11 +130,22 @@ partial class Form1
     writeProbeButton.UseVisualStyleBackColor = true;
     writeProbeButton.Click += WriteProbeButton_Click;
     // 
+    // readXmlButton
+    // 
+    readXmlButton.Location = new Point(211, 170);
+    readXmlButton.Name = "readXmlButton";
+    readXmlButton.Size = new Size(75, 23);
+    readXmlButton.TabIndex = 9;
+    readXmlButton.Text = "Read Xml";
+    readXmlButton.UseVisualStyleBackColor = true;
+    readXmlButton.Click += ReadXmlButton_Click;
+    // 
     // Form1
     // 
     AutoScaleDimensions = new SizeF(6F, 12F);
     AutoScaleMode = AutoScaleMode.Font;
     ClientSize = new Size(531, 306);
+    Controls.Add(readXmlButton);
     Controls.Add(writeProbeButton);
     Controls.Add(outlineTextBox);
     Controls.Add(readOutlineButton);
@@ -156,4 +168,5 @@ partial class Form1
   #endregion
 
   private Button writeProbeButton;
+  private Button readXmlButton;
 }
