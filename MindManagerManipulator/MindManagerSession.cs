@@ -1,3 +1,4 @@
+using System.Diagnostics;
 namespace MindManagerManipulator;
 
 internal sealed record MindManagerDocumentChoice(
@@ -55,6 +56,7 @@ internal sealed class MindManagerSession
   private const int MmRangeAllTopics = 2;
   private readonly int ownerThreadId_ = Environment.CurrentManagedThreadId;
   private readonly Dictionary<long, DocumentEntry> visibleDocuments_ = [];
+  private readonly OutlineObservationTracker observationTracker_ = new();
   private object? application_;
   private object? selectedDocument_;
   private long nextDocumentToken_;
@@ -72,6 +74,7 @@ internal sealed class MindManagerSession
 
     selectedDocument_ = null;
     visibleDocuments_.Clear();
+    observationTracker_.Clear();
 
     try {
       dynamic application = GetApplication();
@@ -103,6 +106,7 @@ internal sealed class MindManagerSession
     VerifyAccess();
 
     selectedDocument_ = null;
+    observationTracker_.Clear();
 
     if (!visibleDocuments_.TryGetValue(token, out DocumentEntry? entry)
         || entry is null) {
@@ -116,12 +120,22 @@ internal sealed class MindManagerSession
       string centralTopicText =
         Convert.ToString(centralTopic.Text)
         ?? "";
+      XmlOutlineReadResult baseline = MindManagerXmlOutlineReader.Read(entry.ComObject);
+      TimeSpan observationElapsed = observationTracker_.Initialize(baseline.Root);
+      TimeSpan total = baseline.XmlFetchElapsed + baseline.ParseElapsed + observationElapsed;
+      Debug.WriteLine(
+        $"Observation baseline {observationTracker_.ObservationId}: " +
+        $"{baseline.NodeCount} topic(s), " +
+        $"fetch {baseline.XmlFetchElapsed.TotalMilliseconds:F1} ms, " +
+        $"parse {baseline.ParseElapsed.TotalMilliseconds:F1} ms, " +
+        $"fingerprint {observationElapsed.TotalMilliseconds:F1} ms, " +
+        $"total {total.TotalMilliseconds:F1} ms.");
       selectedDocument_ = entry.ComObject;
-
       return new MindManagerDocumentSelection(entry.DisplayName, centralTopicText);
     }
     catch {
       selectedDocument_ = null;
+      observationTracker_.Clear();
       throw;
     }
   }
@@ -129,6 +143,7 @@ internal sealed class MindManagerSession
   public void ClearSelection() {
     VerifyAccess();
     selectedDocument_ = null;
+    observationTracker_.Clear();
   }
 
   public XmlOutlineReadResult ReadSelectedOutline() {
@@ -145,6 +160,10 @@ internal sealed class MindManagerSession
   public OutlineReadProjectionResult
   ReadSelectedOutline(string? startId, int? maxDepth) {
     VerifyAccess();
+    if (maxDepth.HasValue && maxDepth.Value < 0) {
+      throw new ArgumentOutOfRangeException(nameof(maxDepth), "maxDepth must not be negative.");
+    }
+
     XmlOutlineReadResult outline = ReadSelectedOutline();
     OutlineNode start =
       startId is null
@@ -152,7 +171,38 @@ internal sealed class MindManagerSession
         : FindOutlineNode(outline.Root, startId)
           ?? throw new TopicNotExposedException(startId);
 
-    return OutlineReadProjection.Create(start, maxDepth);
+    OutlineObservationScanResult observation = observationTracker_.Scan(outline.Root);
+    Stopwatch projectionStopwatch = Stopwatch.StartNew();
+    OutlineReadProjectionResult result =
+      OutlineReadProjection.Create(
+        start,
+        maxDepth,
+        observation.ObservationId,
+        observation.Revision,
+        observationTracker_.GetSubtreeRevision);
+
+    projectionStopwatch.Stop();
+
+    TimeSpan total =
+      outline.XmlFetchElapsed
+      + outline.ParseElapsed
+      + observation.HashScanElapsed
+      + observation.CacheUpdateElapsed
+      + projectionStopwatch.Elapsed;
+
+    Debug.WriteLine(
+      $"ReadOutline {observation.ObservationId} " +
+      $"revision {observation.Revision}, " +
+      $"{outline.NodeCount} topic(s), " +
+      $"{observation.ChangedNodeCount} changed: " +
+      $"fetch {outline.XmlFetchElapsed.TotalMilliseconds:F1} ms, " +
+      $"parse {outline.ParseElapsed.TotalMilliseconds:F1} ms, " +
+      $"hash-scan {observation.HashScanElapsed.TotalMilliseconds:F1} ms, " +
+      $"cache-update {observation.CacheUpdateElapsed.TotalMilliseconds:F1} ms, " +
+      $"projection {projectionStopwatch.Elapsed.TotalMilliseconds:F1} ms, " +
+      $"total {total.TotalMilliseconds:F1} ms.");
+
+    return result;
   }
 
   public TopicTextUpdateResult
@@ -232,9 +282,7 @@ internal sealed class MindManagerSession
   }
 
   public OutlineReadProjectionResult ReadSelectedOutline(int? maxDepth) {
-    VerifyAccess();
-    XmlOutlineReadResult outline = ReadSelectedOutline();
-    return OutlineReadProjection.Create(outline.Root, maxDepth);
+    return ReadSelectedOutline(null, maxDepth);
   }
 
   public string ReadSelectedDocumentXml() {
@@ -284,6 +332,7 @@ internal sealed class MindManagerSession
     selectedDocument_ = null;
     visibleDocuments_.Clear();
     application_ = null;
+    observationTracker_.Clear();
   }
 
   private void VerifyAccess() {

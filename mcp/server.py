@@ -56,11 +56,14 @@ class OutlineNode:
   text: str
   icon_markers: list[str]
   descendant_count: int
+  subtree_revision: int
   children: list[OutlineNode]
 
 
 @dataclass(frozen=True)
 class ReadOutlineResult:
+  observation_id: str
+  revision: int
   root: OutlineNode
   returned_node_count: int
   truncated: bool
@@ -74,7 +77,9 @@ mcp = MCPServer(
     "The server cannot choose or open arbitrary documents. "
     "For large maps, prefer get_document_info first, then use bounded "
     "read_outline calls and descendant_count to choose which branches "
-    "to inspect."
+    "to inspect. read_outline also returns observation/revision metadata "
+    "that can be used to identify branches whose complete logical subtree "
+    "changed since an earlier read within the same observation_id."
   ),
   token_verifier=token_verifier,
   auth=auth_settings,
@@ -230,6 +235,7 @@ def _parse_outline_node(value: Any) -> OutlineNode:
     text=_require_str(value, "text"),
     icon_markers=list(raw_icon_markers),
     descendant_count=_require_int(value, "descendantCount"),
+    subtree_revision=_require_int(value, "subtreeRevision"),
     children=[
       _parse_outline_node(child)
       for child in raw_children
@@ -290,6 +296,16 @@ def get_document_info() -> DocumentInfo:
     "Each node's descendant_count is the number of all descendants "
     "in its complete original subtree, including descendants omitted "
     "from this response by max_depth. "
+    "Each result also contains observation_id and revision. "
+    "observation_id changes when the Manipulator observation state is "
+    "reset, including when the selected document changes; revision values "
+    "must only be compared when observation_id is identical. "
+    "Each node's subtree_revision is the latest global revision at which "
+    "a change was observed in that node's complete logical subtree, "
+    "including descendants omitted by max_depth. "
+    "To find branches changed since an earlier read_outline result from "
+    "the same observation_id, inspect nodes whose subtree_revision is "
+    "greater than the earlier result's revision. "
     "icon_markers contains raw MindManager marker identifiers."
   ),
   annotations=READ_ONLY_TOOL_ANNOTATIONS,
@@ -319,15 +335,11 @@ def read_outline(
   )
 
   return ReadOutlineResult(
+    observation_id=_require_str(value, "observationId"),
+    revision=_require_int(value, "revision"),
     root=_parse_outline_node(value.get("root")),
-    returned_node_count=_require_int(
-      value,
-      "returnedNodeCount",
-    ),
-    truncated=_require_bool(
-      value,
-      "truncated",
-    ),
+    returned_node_count=_require_int(value, "returnedNodeCount"),
+    truncated=_require_bool(value, "truncated"),
   )
 
 

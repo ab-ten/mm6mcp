@@ -5,16 +5,24 @@ internal sealed record OutlineReadNode(
   string Text,
   List<string> IconMarkers,
   int DescendantCount,
+  long SubtreeRevision,
   List<OutlineReadNode> Children);
 
 internal sealed record OutlineReadProjectionResult(
   OutlineReadNode Root,
   int ReturnedNodeCount,
-  bool Truncated);
+  bool Truncated,
+  string ObservationId,
+  long Revision);
 
 internal static class OutlineReadProjection
 {
-  public static OutlineReadProjectionResult Create(OutlineNode root, int? maxDepth) {
+  public static OutlineReadProjectionResult Create(
+      OutlineNode root,
+      int? maxDepth,
+      string observationId,
+      long revision,
+      Func<string, long> getSubtreeRevision) {
     if (maxDepth.HasValue && maxDepth.Value < 0) {
       throw new ArgumentOutOfRangeException(nameof(maxDepth), "maxDepth must not be negative.");
     }
@@ -26,12 +34,15 @@ internal static class OutlineReadProjection
         0,
         maxDepth,
         ref returnedNodeCount,
+        getSubtreeRevision,
         out OutlineReadNode? projectedRoot);
 
     return new OutlineReadProjectionResult(
       projectedRoot!,
       returnedNodeCount,
-      returnedNodeCount < totalNodeCount);
+      returnedNodeCount < totalNodeCount,
+      observationId,
+      revision);
   }
 
   private static int Build(
@@ -39,6 +50,7 @@ internal static class OutlineReadProjection
     int depth,
     int? maxDepth,
     ref int returnedNodeCount,
+    Func<string, long> getSubtreeRevision,
     out OutlineReadNode? projectedNode)
   {
     bool include = maxDepth is null || depth <= maxDepth.Value;
@@ -52,6 +64,7 @@ internal static class OutlineReadProjection
           depth+1,
           maxDepth,
           ref returnedNodeCount,
+          getSubtreeRevision,
           out OutlineReadNode? projectedChild);
       descendantCount += childNodeCount;
       if (projectedChild is not null) {
@@ -72,6 +85,7 @@ internal static class OutlineReadProjection
         node.Text,
         node.IconMarkers,
         descendantCount,
+        getSubtreeRevision(node.Id),
         projectedChildren!);
 
     return descendantCount + 1;

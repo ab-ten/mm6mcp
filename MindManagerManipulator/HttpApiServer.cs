@@ -117,6 +117,8 @@ internal sealed class HttpApiServer
 
       return Results.Ok(
         new {
+          observationId = result.ObservationId,
+          revision = result.Revision,
           root = result.Root,
           returnedNodeCount = result.ReturnedNodeCount,
           truncated = result.Truncated,
