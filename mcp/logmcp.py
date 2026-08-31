@@ -5,7 +5,8 @@ from collections.abc import Mapping
 from typing import Any
 
 from mcp.server.auth.middleware.auth_context import get_access_token
-from mcp.server.fastmcp import FastMCP
+from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
+from mcp_types import CLIENT_INFO_META_KEY
 
 
 ACCESS_LOGGER = logging.getLogger("mcp.access")
@@ -24,7 +25,6 @@ SENSITIVE_LOG_KEYS = frozenset({
 
 
 def _sanitize_log_value(value: Any, key: str = "") -> Any:
-  """ログ出力用に値を制限・秘匿します。"""
   if key.casefold() in SENSITIVE_LOG_KEYS:
     return "<redacted>"
 
@@ -47,56 +47,75 @@ def _sanitize_log_value(value: Any, key: str = "") -> Any:
       _sanitize_log_value(child_value)
       for child_value in value[:ACCESS_LOG_SEQUENCE_LIMIT]
     ]
+
     if len(value) > ACCESS_LOG_SEQUENCE_LIMIT:
       values.append(f"<{len(value)-ACCESS_LOG_SEQUENCE_LIMIT} more items>")
+
     return values
 
   return _sanitize_log_value(repr(value))
 
 
-class AccessLogFastMCP(FastMCP):
-  """すべての MCP ツール呼び出しをアクセスログへ記録します。"""
+def _read_client_info(
+  ctx: ServerRequestContext,
+) -> tuple[str | None, str | None]:
+  if ctx.meta is None:
+    return None, None
 
-  async def call_tool(
-    self,
-    name: str,
-    arguments: dict[str, Any],
-  ) -> Any:
-    started_at = time.perf_counter()
-    context = self.get_context()
-    access_token = get_access_token()
+  value = ctx.meta.get(CLIENT_INFO_META_KEY)
+  if not isinstance(value, Mapping):
+    return None, None
 
-    event: dict[str, Any] = {
-      "event": "mcp_tool_call",
-      "tool": name,
-      "request_id": context.request_id,
-      "mcp_client_id": context.client_id,
-      "arguments": _sanitize_log_value(arguments),
-    }
+  name = value.get("name")
+  version = value.get("version")
 
-    if access_token is not None:
-      event["oauth_client_id"] = access_token.client_id
+  return (
+    name if isinstance(name, str) else None,
+    version if isinstance(version, str) else None,
+  )
 
-    try:
-      result = await super().call_tool(name, arguments)
-    except Exception as exc:
-      event["status"] = "error"
-      event["error_type"] = type(exc).__name__
-      raise
-    else:
-      event["status"] = "ok"
-      event["result_type"] = type(result).__name__
-      return result
-    finally:
-      event["duration_ms"] = round(
-        (time.perf_counter()-started_at)*1000,
-        3,
-      )
-      ACCESS_LOGGER.info(
-        "%s",
-        json.dumps(
-          event,
-          ensure_ascii=False,
-          separators=(",", ":"),
-        ),
-      )
+
+async def access_log_middleware(
+  ctx: ServerRequestContext,
+  call_next: CallNext,
+) -> HandlerResult:
+  if ctx.method != "tools/call":
+    return await call_next(ctx)
+
+  started_at = time.perf_counter()
+  params = ctx.params or {}
+  tool = params.get("name")
+  arguments = params.get("arguments")
+  mcp_client_name, mcp_client_version = _read_client_info(ctx)
+  access_token = get_access_token()
+
+  event: dict[str, Any] = {
+    "event": "mcp_tool_call",
+    "tool": tool if isinstance(tool, str) else "<unknown>",
+    "request_id": ctx.request_id,
+    "protocol_version": ctx.protocol_version,
+    "arguments": _sanitize_log_value(arguments if isinstance(arguments, Mapping) else {}),
+  }
+
+  if mcp_client_name is not None:
+    event["mcp_client_name"] = mcp_client_name
+
+  if mcp_client_version is not None:
+    event["mcp_client_version"] = mcp_client_version
+
+  if access_token is not None:
+    event["oauth_client_id"] = access_token.client_id
+
+  try:
+    result = await call_next(ctx)
+  except Exception as exc:
+    event["status"] = "error"
+    event["error_type"] = type(exc).__name__
+    raise
+  else:
+    event["status"] = "ok"
+    event["result_type"] = type(result).__name__
+    return result
+  finally:
+    event["duration_ms"] = round((time.perf_counter()-started_at)*1000, 3)
+    ACCESS_LOGGER.info("%s", json.dumps(event, ensure_ascii=False, separators=(",", ":")))

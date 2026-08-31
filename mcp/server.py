@@ -13,6 +13,7 @@ from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from starlette.responses import JSONResponse
 
+from logmcp import access_log_middleware
 from auth import (
   COGNITO_AUTHORIZATION_ENDPOINT,
   COGNITO_ISSUER,
@@ -119,6 +120,9 @@ mcp = MCPServer(
   ),
   token_verifier=token_verifier,
   auth=auth_settings,
+  middleware=[
+    access_log_middleware,
+  ],
 )
 
 
