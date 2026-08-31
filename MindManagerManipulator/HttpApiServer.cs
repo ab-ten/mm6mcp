@@ -23,20 +23,18 @@ internal sealed record ReadOutlineHttpRequest
 internal sealed class HttpApiServer
 : IDisposable
 {
-  private const int Port = 50052;
   private readonly WebApplication application_;
 
   private HttpApiServer(WebApplication application) {
     application_ = application;
   }
 
-  public static HttpApiServer Start(Form1 form) {
+  public static HttpApiServer Start(Form1 form, IPAddress listenAddress, int port) {
     WebApplicationBuilder builder = WebApplication.CreateBuilder();
 
     builder.WebHost.ConfigureKestrel(options => {
       options.Listen(
-        IPAddress.Loopback,
-        Port,
+        listenAddress, port,
         listenOptions => {
           listenOptions.Protocols =
             HttpProtocols.Http1;

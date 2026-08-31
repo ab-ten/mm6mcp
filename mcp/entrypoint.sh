@@ -28,7 +28,7 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
-python /app/server.py &
+python /app/server.py "$@" &
 mcp_pid="$!"
 
 python - <<PY

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
@@ -24,21 +26,55 @@ MCP_HTTP_HOST = os.environ.get("MCP_HTTP_HOST", "127.0.0.1")
 MCP_HTTP_PORT = int(os.environ.get("MCP_HTTP_PORT", "8000"))
 MCP_HTTP_PATH = os.environ.get("MCP_HTTP_PATH", "/mcp")
 
-MANIPULATOR_URL = os.environ.get(
-  "MANIPULATOR_URL",
-  "http://host.docker.internal:50052",
-).rstrip("/")
+MANIPULATOR_TIMEOUT_SECONDS = float(os.environ.get("MANIPULATOR_TIMEOUT_SECONDS", "10"))
+_DEFAULT_MANIPULATOR_URL = os.environ.get("MANIPULATOR_URL")
 
-MANIPULATOR_TIMEOUT_SECONDS = float(
-  os.environ.get("MANIPULATOR_TIMEOUT_SECONDS", "10")
-)
+if _DEFAULT_MANIPULATOR_URL:
+  _parsed_manipulator_url = urllib.parse.urlsplit(_DEFAULT_MANIPULATOR_URL)
+  DEFAULT_MANIPULATOR_HOST = (_parsed_manipulator_url.hostname or "host.docker.internal")
+  DEFAULT_MANIPULATOR_PORT = (_parsed_manipulator_url.port or 50052)
+else:
+  DEFAULT_MANIPULATOR_HOST = os.environ.get("MANIPULATOR_HOST", "host.docker.internal")
+  DEFAULT_MANIPULATOR_PORT = int(os.environ.get("MANIPULATOR_PORT", "50052"))
 
-
+MANIPULATOR_URL = ""
 READ_ONLY_TOOL_ANNOTATIONS = ToolAnnotations(
   read_only_hint=True,
   destructive_hint=False,
   open_world_hint=False,
 )
+
+
+def _port(value: str) -> int:
+  try:
+    result = int(value)
+  except ValueError as exc:
+    raise argparse.ArgumentTypeError("port must be an integer") from exc
+  if result < 1 or result > 65535:
+    raise argparse.ArgumentTypeError("port must be from 1 through 65535")
+  return result
+
+
+def _parse_args() -> argparse.Namespace:
+  parser = argparse.ArgumentParser(
+    description=(
+      "Run the MindManager MCP server. "
+      "--host and --port specify the Windows "
+      "MindManager Manipulator endpoint to connect to; "
+      "the MCP HTTP listener remains controlled by "
+      "MCP_HTTP_HOST and MCP_HTTP_PORT."
+    )
+  )
+  parser.add_argument("--host", default=DEFAULT_MANIPULATOR_HOST)
+  parser.add_argument("--port", type=_port, default=DEFAULT_MANIPULATOR_PORT)
+  return parser.parse_args()
+
+
+def _make_manipulator_url(host: str, port: int) -> str:
+  url_host = host
+  if ":" in host and not host.startswith("["):
+    url_host = f"[{host}]"
+  return f"http://{url_host}:{port}"
 
 
 @dataclass(frozen=True)
@@ -300,12 +336,14 @@ def get_document_info() -> DocumentInfo:
     "observation_id changes when the Manipulator observation state is "
     "reset, including when the selected document changes; revision values "
     "must only be compared when observation_id is identical. "
-    "Each node's subtree_revision is the latest global revision at which "
-    "a change was observed in that node's complete logical subtree, "
-    "including descendants omitted by max_depth. "
-    "To find branches changed since an earlier read_outline result from "
-    "the same observation_id, inspect nodes whose subtree_revision is "
-    "greater than the earlier result's revision. "
+    "Each node's subtree_revision changes when the complete logical subtree "
+    "rooted at that topic changes. "
+    "This includes changes to the topic itself, descendant changes, "
+    "topic additions or removals, and child ordering changes. "
+    "Within the same observation_id, "
+    "if a node's subtree_revision is greater than the "
+    "revision returned by an earlier read_outline, "
+    "that subtree changed after the earlier observation. "
     "icon_markers contains raw MindManager marker identifiers."
   ),
   annotations=READ_ONLY_TOOL_ANNOTATIONS,
@@ -381,6 +419,9 @@ async def oauth_authorization_server_metadata(request):
 
 
 if __name__ == "__main__":
+  args = _parse_args()
+  MANIPULATOR_URL = _make_manipulator_url(args.host, args.port)
+  print(f"{MANIPULATOR_URL=}")
   mcp.run(
     transport="streamable-http",
     host=MCP_HTTP_HOST,
