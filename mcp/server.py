@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from starlette.responses import JSONResponse
 
@@ -44,6 +45,19 @@ READ_ONLY_TOOL_ANNOTATIONS = ToolAnnotations(
   destructive_hint=False,
   open_world_hint=False,
 )
+
+KNOWN_MANIPULATOR_TOOL_ERRORS = {
+  (404, "topic_not_found"): (
+    "The requested MindManager topic is no longer available in the "
+    "currently selected document. It may have been deleted or the "
+    "selected document may have changed. Read the outline again and "
+    "use a current topic id."
+  ),
+  (409, "no_document_selected"): (
+    "No MindManager document is selected in the Manipulator. "
+    "Select a document in the Windows Manipulator and try again."
+  ),
+}
 
 
 def _port(value: str) -> int:
@@ -184,6 +198,13 @@ def _request_json(
     except RuntimeError:
       code = "http_error"
       message = raw.decode("utf-8", errors="replace")
+
+    tool_error_message = KNOWN_MANIPULATOR_TOOL_ERRORS.get(
+      (exc.code, code)
+    )
+
+    if tool_error_message is not None:
+      raise ToolError(tool_error_message) from None
 
     raise RuntimeError(
       f"MindManager Manipulator returned HTTP {exc.code}: "
