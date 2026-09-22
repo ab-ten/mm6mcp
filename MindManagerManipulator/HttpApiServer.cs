@@ -117,6 +117,7 @@ internal sealed class HttpApiServer
         new {
           observationId = result.ObservationId,
           revision = result.Revision,
+          ancestorPath = result.AncestorPath,
           root = result.Root,
           returnedNodeCount = result.ReturnedNodeCount,
           truncated = result.Truncated,

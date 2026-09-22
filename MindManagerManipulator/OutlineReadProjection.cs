@@ -10,15 +10,21 @@ internal sealed record OutlineReadNode(
 
 internal sealed record OutlineReadProjectionResult(
   OutlineReadNode Root,
+  List<OutlineAncestorNode> AncestorPath,
   int ReturnedNodeCount,
   bool Truncated,
   string ObservationId,
   long Revision);
 
+internal sealed record OutlineAncestorNode(
+  string Id,
+  string Text);
+
 internal static class OutlineReadProjection
 {
   public static OutlineReadProjectionResult Create(
       OutlineNode root,
+      IReadOnlyList<OutlineAncestorNode> ancestorPath,
       int? maxDepth,
       string observationId,
       long revision,
@@ -39,6 +45,7 @@ internal static class OutlineReadProjection
 
     return new OutlineReadProjectionResult(
       projectedRoot!,
+      [.. ancestorPath],
       returnedNodeCount,
       returnedNodeCount < totalNodeCount,
       observationId,

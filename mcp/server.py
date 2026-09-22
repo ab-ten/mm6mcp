@@ -112,9 +112,15 @@ class OutlineNode:
 
 
 @dataclass(frozen=True)
+class OutlineAncestor:
+  id: str
+  text: str
+
+@dataclass(frozen=True)
 class ReadOutlineResult:
   observation_id: str
   revision: int
+  ancestor_path: list[OutlineAncestor]
   root: OutlineNode
   returned_node_count: int
   truncated: bool
@@ -317,6 +323,14 @@ def _parse_outline_node(value: Any) -> OutlineNode:
     ],
   )
 
+def _parse_outline_ancestor(value: Any) -> OutlineAncestor:
+  if not isinstance(value, dict):
+    raise RuntimeError("MindManager Manipulator returned an invalid outline ancestor.")
+
+  return OutlineAncestor(
+    id=_require_str(value, "id"),
+    text=_require_str(value, "text"),
+  )
 
 @mcp.tool(
   title="Get MindManager document info",
@@ -366,6 +380,11 @@ def get_document_info() -> DocumentInfo:
     "Omit start_id to begin at the Central Topic. "
     "When start_id is supplied, copy an opaque topic id exactly from "
     "an earlier read_outline result; that topic becomes depth 0. "
+    "When start_id is supplied, ancestor_path contains the ancestors of the "
+    "returned root, ordered from the Central Topic to its immediate parent. "
+    "Use ancestor_path as the MindManager location context for the returned "
+    "subtree. In particular, preserve semantic scope expressed by ancestor "
+    "topics when reasoning about the subtree. "
     "Omit max_depth for the complete subtree. "
     "max_depth=0 returns only the start node. "
     "Use this tool to obtain the current MindManager outline. "
@@ -416,9 +435,14 @@ def read_outline(
     body,
   )
 
+  raw_ancestor_path = value.get("ancestorPath")
+  if not isinstance(raw_ancestor_path, list):
+    raise RuntimeError("MindManager Manipulator returned invalid ancestorPath.")
+
   return ReadOutlineResult(
     observation_id=_require_str(value, "observationId"),
     revision=_require_int(value, "revision"),
+    ancestor_path=[_parse_outline_ancestor(item) for item in raw_ancestor_path],
     root=_parse_outline_node(value.get("root")),
     returned_node_count=_require_int(value, "returnedNodeCount"),
     truncated=_require_bool(value, "truncated"),

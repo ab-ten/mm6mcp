@@ -165,17 +165,27 @@ internal sealed class MindManagerSession
     }
 
     XmlOutlineReadResult outline = ReadSelectedOutline();
-    OutlineNode start =
-      startId is null
-        ? outline.Root
-        : FindOutlineNode(outline.Root, startId)
-          ?? throw new TopicNotExposedException(startId);
+    List<OutlineNode> ancestors = [];
+    OutlineNode start;
+    if (startId is null) {
+      start = outline.Root;
+    }else if (! TryFindOutlineNode(outline.Root, startId, ancestors, out OutlineNode? found)) {
+      throw new TopicNotExposedException(startId);
+    }else {
+      start = found!;
+    }
+
+    List<OutlineAncestorNode> ancestorPath =
+      ancestors
+      .Select(node => new OutlineAncestorNode(node.Id, node.Text))
+      .ToList();
 
     OutlineObservationScanResult observation = observationTracker_.Scan(outline.Root);
     Stopwatch projectionStopwatch = Stopwatch.StartNew();
     OutlineReadProjectionResult result =
       OutlineReadProjection.Create(
         start,
+        ancestorPath,
         maxDepth,
         observation.ObservationId,
         observation.Revision,
@@ -229,10 +239,8 @@ internal sealed class MindManagerSession
     XmlOutlineReadResult before =
       MindManagerXmlOutlineReader.Read(documentObject);
 
-    OutlineNode? target =
-      FindOutlineNode(before.Root, id);
-
-    if (target is null) {
+    List<OutlineNode> ancestors = [];
+    if (! TryFindOutlineNode(before.Root, id, ancestors, out OutlineNode? target)) {
       throw new TopicNotExposedException(id);
     }
 
@@ -253,7 +261,7 @@ internal sealed class MindManagerSession
         "Logical outline topic unexpectedly reports itself as floating.");
     }
 
-    string oldText = target.Text;
+    string oldText = target!.Text;
     if (oldText != expectedText) {
       throw new TopicTextConflictException(id, expectedText, oldText);
     }
@@ -264,11 +272,11 @@ internal sealed class MindManagerSession
 
     topic.Text = newText;
     XmlOutlineReadResult after = MindManagerXmlOutlineReader.Read(documentObject);
-    OutlineNode? updated = FindOutlineNode(after.Root, id);
-    if (updated is null) {
+    List<OutlineNode> ancestors2 = [];
+    if (! TryFindOutlineNode(before.Root, id, ancestors2, out OutlineNode? updated)) {
       throw new InvalidOperationException("The topic OId disappeared after the write.");
     }
-    if (updated.Text != newText) {
+    if (updated!.Text != newText) {
       throw new InvalidOperationException("Document.Xml does not contain the updated text.");
     }
 
@@ -295,20 +303,30 @@ internal sealed class MindManagerSession
       ?? throw new InvalidOperationException("MindManager returned no document XML.");
   }
 
-  private static OutlineNode?
-  FindOutlineNode(OutlineNode node, string id) {
+  private static bool
+  TryFindOutlineNode(
+    OutlineNode node,
+    string id,
+    List<OutlineNode> ancestorPath,
+    out OutlineNode? found)
+  {
     if (node.Id == id) {
-      return node;
+      found = node;
+      return true;
     }
 
+    ancestorPath.Add(node);
+
     foreach (OutlineNode child in node.Children) {
-      OutlineNode? found = FindOutlineNode(child, id);
-      if (found is not null) {
-        return found;
+      if (TryFindOutlineNode(child, id, ancestorPath, out found)) {
+        return true;
       }
     }
 
-    return null;
+    ancestorPath.RemoveAt(ancestorPath.Count-1);
+
+    found = null;
+    return false;
   }
 
   private object GetApplication() {
