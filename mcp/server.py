@@ -125,6 +125,24 @@ class ReadOutlineResult:
   returned_node_count: int
   truncated: bool
 
+@dataclass(frozen=True)
+class FindTopicNode:
+  id: str
+  text: str
+  is_match: bool
+  children: list[FindTopicNode]
+
+
+@dataclass(frozen=True)
+class FindTopicResult:
+  observation_id: str
+  revision: int
+  total_hit_count: int
+  returned_hit_count: int
+  returned_node_count: int
+  truncated: bool
+  context_root: FindTopicNode | None
+
 
 mcp = MCPServer(
   "mindmanager-readonly",
@@ -146,11 +164,16 @@ mcp = MCPServer(
     "verify the edited scope, and only then proceed with the dependent "
     "task. "
 
-    "For large maps, prefer get_document_info first, then use bounded "
-    "read_outline calls and descendant_count to choose which branches "
-    "to inspect. read_outline also returns observation/revision metadata "
-    "that can be used to identify branches whose complete logical subtree "
-    "changed since an earlier read within the same observation_id."
+    "For large maps, prefer get_document_info first. "
+    "When the location of a relevant topic is unknown, or the map may be "
+    "poorly organized, use find_topic to locate matching topic text while "
+    "preserving its Central Topic ancestry. "
+    "Then use read_outline with a returned topic id to inspect the "
+    "relevant subtree in detail. "
+    "When the likely branch is already known, bounded read_outline calls "
+    "and descendant_count remain the preferred way to browse it. "
+    "read_outline and find_topic both return observation/revision metadata "
+    "for reasoning about freshness within the same observation_id."
   ),
   token_verifier=token_verifier,
   auth=auth_settings,
@@ -332,6 +355,24 @@ def _parse_outline_ancestor(value: Any) -> OutlineAncestor:
     text=_require_str(value, "text"),
   )
 
+def _parse_find_topic_node(value: Any) -> FindTopicNode:
+  if not isinstance(value, dict):
+    raise RuntimeError("MindManager Manipulator returned an invalid find-topic node.")
+
+  raw_children = value.get("children")
+  if not isinstance(raw_children, list):
+    raise RuntimeError("MindManager Manipulator returned invalid find-topic children.")
+
+  return FindTopicNode(
+    id=_require_str(value, "id"),
+    text=_require_str(value, "text"),
+    is_match=_require_bool(value, "isMatch"),
+    children=[
+      _parse_find_topic_node(child)
+      for child in raw_children
+    ],
+  )
+
 @mcp.tool(
   title="Get MindManager document info",
   description=(
@@ -448,6 +489,126 @@ def read_outline(
     truncated=_require_bool(value, "truncated"),
   )
 
+
+@mcp.tool(
+  title="Find MindManager topics",
+  description=(
+    "Search Topic Text in the logical outline currently exposed by the "
+    "Windows user. "
+    "groups is an OR-of-AND query: every term within one group must occur "
+    "as a case-insensitive substring in the same Topic Text, and matching "
+    "any group is a hit. "
+    "For example, [['state', 'checker'], ['publish', 'slug'], ['erased']] "
+    "means (state AND checker) OR (publish AND slug) OR erased. "
+    "Omit start_id to search from the Central Topic. "
+    "When start_id is supplied, search only that topic and its descendants. "
+    "Use an opaque topic id copied exactly from an earlier read_outline or "
+    "find_topic result. "
+    "Hits are selected in MindManager outline order using depth-first "
+    "preorder traversal. "
+    "max_hits limits the number of hit topics represented in the returned "
+    "context tree, but total_hit_count counts all hits in the searched "
+    "subtree. "
+    "The result context_root is a pruned tree rooted at the Central Topic "
+    "containing only returned hits and the ancestors needed to preserve "
+    "their MindManager location context. "
+    "is_match distinguishes actual returned hits from ancestor topics "
+    "included only for context. "
+    "If truncated is true, refine the search terms or restrict start_id "
+    "rather than assuming all matching topics were returned. "
+    "After locating a relevant topic, normally use read_outline with its id "
+    "to inspect the complete surrounding subtree."
+  ),
+  annotations=READ_ONLY_TOOL_ANNOTATIONS,
+)
+def find_topic(
+  groups: list[list[str]],
+  start_id: str | None = None,
+  max_hits: int = 100,
+) -> FindTopicResult:
+  """Search Topic Text while preserving the MindManager ancestry of hits.
+
+  groups is interpreted as OR-of-AND. Each individual term uses
+  case-insensitive substring matching against one Topic Text.
+  """
+
+  if not groups:
+    raise ValueError(
+      "groups must contain at least one search group."
+    )
+
+  for group_index, group in enumerate(groups):
+    if not group:
+      raise ValueError(
+        f"groups[{group_index}] must contain at least one search term."
+      )
+
+    for term_index, term in enumerate(group):
+      if term == "":
+        raise ValueError(
+          f"groups[{group_index}][{term_index}] must not be empty."
+        )
+
+  if start_id == "":
+    raise ValueError(
+      "start_id must not be empty."
+    )
+
+  if max_hits < 1:
+    raise ValueError(
+      "max_hits must be at least 1."
+    )
+
+  body: dict[str, Any] = {
+    "groups": groups,
+    "maxHits": max_hits,
+  }
+
+  if start_id is not None:
+    body["startId"] = start_id
+
+  value = _request_json(
+    "POST",
+    "/v1/find-topic",
+    body,
+  )
+
+  raw_context_root = value.get("contextRoot")
+
+  if raw_context_root is None:
+    context_root = None
+  else:
+    context_root = _parse_find_topic_node(
+      raw_context_root
+    )
+
+  return FindTopicResult(
+    observation_id=_require_str(
+      value,
+      "observationId",
+    ),
+    revision=_require_int(
+      value,
+      "revision",
+    ),
+    total_hit_count=_require_int(
+      value,
+      "totalHitCount",
+    ),
+    returned_hit_count=_require_int(
+      value,
+      "returnedHitCount",
+    ),
+    returned_node_count=_require_int(
+      value,
+      "returnedNodeCount",
+    ),
+    truncated=_require_bool(
+      value,
+      "truncated",
+    ),
+    context_root=context_root,
+  )
 
 @mcp.custom_route(
   "/healthz",
