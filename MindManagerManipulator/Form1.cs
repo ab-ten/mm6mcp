@@ -145,6 +145,18 @@ public partial class Form1 : Form
       cancellationToken);
   }
 
+  internal Task<FindTopicResult?>
+  TryFindTopicForHttpApiAsync(
+    IReadOnlyList<IReadOnlyList<string>> groups,
+    string? startId,
+    int maxHits,
+    CancellationToken cancellationToken)
+  {
+    return this.InvokeAsync(
+      () => session_.HasSelection ? session_.FindTopic(groups, startId, maxHits) : null,
+      cancellationToken);
+  }
+
   internal Task<TopicTextUpdateResult?>
   TryUpdateTopicTextForHttpApiAsync(
     string id,

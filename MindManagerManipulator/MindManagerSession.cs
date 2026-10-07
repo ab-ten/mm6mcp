@@ -20,6 +20,15 @@ internal sealed record TopicTextUpdateResult(
   string NewText,
   bool Changed);
 
+internal sealed record FindTopicResult(
+  string ObservationId,
+  long Revision,
+  OutlineTopicSearchNode? ContextRoot,
+  int TotalHitCount,
+  int ReturnedHitCount,
+  int ReturnedNodeCount,
+  bool Truncated);
+
 internal sealed class TopicTextConflictException
 : Exception
 {
@@ -213,6 +222,82 @@ internal sealed class MindManagerSession
       $"total {total.TotalMilliseconds:F1} ms.");
 
     return result;
+  }
+
+  /// <summary>
+  /// 現在選択されているMindManager documentのTopic Textを検索する。
+  /// </summary>
+  ///
+  /// <remarks>
+  /// startIdを指定した場合はそのTopicを含むsubtreeだけを検索するが、
+  /// ContextRootはCentral Topicからhitまでの文脈を保持する。
+  /// groupsはOR-of-ANDで、比較はcase-insensitiveなsubstring一致である。
+  /// </remarks>
+  public FindTopicResult
+  FindTopic(
+    IReadOnlyList<IReadOnlyList<string>> groups,
+    string? startId,
+    int maxHits)
+  {
+    VerifyAccess();
+
+    if (startId == "") {
+      throw new ArgumentException("startId must not be empty.", nameof(startId));
+    }
+
+    if (maxHits < 1) {
+      throw new ArgumentOutOfRangeException(nameof(maxHits), "maxHits must be at least 1.");
+    }
+
+    XmlOutlineReadResult outline = ReadSelectedOutline();
+    List<OutlineNode> ancestors = [];
+    OutlineNode searchRoot;
+
+    if (startId is null) {
+      searchRoot = outline.Root;
+    }else if (!TryFindOutlineNode(outline.Root, startId, ancestors, out OutlineNode? found)) {
+      throw new TopicNotExposedException(startId);
+    }else {
+      searchRoot = found!;
+    }
+
+    OutlineObservationScanResult observation = observationTracker_.Scan(outline.Root);
+    Stopwatch searchStopwatch = Stopwatch.StartNew();
+
+    OutlineTopicSearchProjection search =
+      OutlineTopicSearch.Search(outline.Root, searchRoot, groups, maxHits);
+
+    searchStopwatch.Stop();
+
+    TimeSpan total =
+      outline.XmlFetchElapsed
+      + outline.ParseElapsed
+      + observation.HashScanElapsed
+      + observation.CacheUpdateElapsed
+      + searchStopwatch.Elapsed;
+
+    Debug.WriteLine(
+      $"FindTopic {observation.ObservationId} " +
+      $"revision {observation.Revision}, " +
+      $"{outline.NodeCount} topic(s), " +
+      $"{search.TotalHitCount} hit(s), " +
+      $"{search.ReturnedHitCount} returned hit(s), " +
+      $"{search.ReturnedNodeCount} returned node(s): " +
+      $"fetch {outline.XmlFetchElapsed.TotalMilliseconds:F1} ms, " +
+      $"parse {outline.ParseElapsed.TotalMilliseconds:F1} ms, " +
+      $"hash-scan {observation.HashScanElapsed.TotalMilliseconds:F1} ms, " +
+      $"cache-update {observation.CacheUpdateElapsed.TotalMilliseconds:F1} ms, " +
+      $"search {searchStopwatch.Elapsed.TotalMilliseconds:F1} ms, " +
+      $"total {total.TotalMilliseconds:F1} ms.");
+
+    return new FindTopicResult(
+      observation.ObservationId,
+      observation.Revision,
+      search.ContextRoot,
+      search.TotalHitCount,
+      search.ReturnedHitCount,
+      search.ReturnedNodeCount,
+      search.Truncated);
   }
 
   public TopicTextUpdateResult

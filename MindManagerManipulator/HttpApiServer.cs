@@ -20,6 +20,13 @@ internal sealed record ReadOutlineHttpRequest
   public int? MaxDepth { get; init; }
 }
 
+internal sealed record FindTopicHttpRequest
+{
+  public List<List<string>?>? Groups { get; init; }
+  public string? StartId { get; init; }
+  public int? MaxHits { get; init; }
+}
+
 internal sealed class HttpApiServer
 : IDisposable
 {
@@ -56,6 +63,12 @@ internal sealed class HttpApiServer
       (ReadOutlineHttpRequest? request,
        CancellationToken cancellationToken) =>
          ReadOutlineAsync(form, request, cancellationToken));
+
+    application.MapPost(
+      "/v1/find-topic",
+      (FindTopicHttpRequest? request,
+       CancellationToken cancellationToken) =>
+         FindTopicAsync(form, request, cancellationToken));
 
     application.MapPost(
       "/v1/update-topic-text",
@@ -121,6 +134,99 @@ internal sealed class HttpApiServer
           root = result.Root,
           returnedNodeCount = result.ReturnedNodeCount,
           truncated = result.Truncated,
+        });
+    }
+    catch (TopicNotExposedException) {
+      return Results.NotFound(
+        new {
+          error = "topic_not_found",
+          message = "Topic is not part of the exposed outline.",
+        });
+    }
+  }
+
+  private static async Task<IResult>
+  FindTopicAsync(Form1 form, FindTopicHttpRequest? request, CancellationToken cancellationToken) {
+    if (request?.Groups is null || request.Groups.Count == 0) {
+      return Results.BadRequest(
+        new {
+          error = "invalid_request",
+          message = "groups must contain at least one search group.",
+        });
+    }
+
+    for (int groupIndex=0; groupIndex<request.Groups.Count; ++groupIndex) {
+      List<string>? group = request.Groups[groupIndex];
+
+      if (group is null || group.Count == 0) {
+        return Results.BadRequest(
+          new {
+            error = "invalid_request",
+            message =
+              $"groups[{groupIndex}] must contain at least one search term.",
+          });
+      }
+
+      for (int termIndex=0; termIndex<group.Count; ++termIndex) {
+        if (string.IsNullOrEmpty(group[termIndex])) {
+          return Results.BadRequest(
+            new {
+              error = "invalid_request",
+              message =
+                $"groups[{groupIndex}][{termIndex}] must not be empty.",
+            });
+        }
+      }
+    }
+
+    if (request.StartId == "") {
+      return Results.BadRequest(
+        new {
+          error = "invalid_request",
+          message = "startId must not be empty.",
+        });
+    }
+
+    int maxHits = request.MaxHits ?? 100;
+
+    if (maxHits < 1) {
+      return Results.BadRequest(
+        new {
+          error = "invalid_request",
+          message = "maxHits must be at least 1.",
+        });
+    }
+
+    List<IReadOnlyList<string>> groups =
+      request.Groups
+        .Select(group => (IReadOnlyList<string>)group!)
+        .ToList();
+
+    try {
+      FindTopicResult? result =
+        await form.TryFindTopicForHttpApiAsync(
+          groups,
+          request.StartId,
+          maxHits,
+          cancellationToken);
+
+      if (result is null) {
+        return Results.Conflict(
+          new {
+            error = "no_document_selected",
+            message = "No MindManager document is selected.",
+          });
+      }
+
+      return Results.Ok(
+        new {
+          observationId = result.ObservationId,
+          revision = result.Revision,
+          totalHitCount = result.TotalHitCount,
+          returnedHitCount = result.ReturnedHitCount,
+          returnedNodeCount = result.ReturnedNodeCount,
+          truncated = result.Truncated,
+          contextRoot = result.ContextRoot,
         });
     }
     catch (TopicNotExposedException) {
