@@ -1,0 +1,11 @@
+.git
+.github
+.env
+*.env
+Backlog.md
+memo.txt
+nextprompt.md
+MindManagerManipulator
+**/obj
+**/__pycache__
+**/*.pyc
